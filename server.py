@@ -4,6 +4,9 @@ import tomllib
 import subprocess
 import asyncio
 import psutil
+from huggingface_hub import hf_hub_download
+
+config_path = "runners.toml"
 
 class Runner:
     def __init__(self, name, args):
@@ -106,8 +109,20 @@ async def version_handler(request):
     return web.json_response(version)
 
 async def pull_handler(request):
-    # TODO: Implement logic for generating something
-    return web.json_response({"message": "Generate operation not implemented yet"})
+    data = await request.json()
+    model_name = data.get('model')
+    if not model_name:
+        return web.json_response({"error": "Model name is required"}, status=400)
+
+    repo_id, filename = model_name.split(':')
+    path = hf_hub_download(repo_id=repo_id, filename=filename)
+
+    with open(config_path, 'a') as f:
+        f.write(f'\n\n["{model_name}"]\nmodel = "{path}"\n\n')
+
+    runners[model_name] = {"model": path}
+
+    return web.json_response({"status": "success"})
 
 async def generate_handler(request):
     # TODO: Implement logic for generating something
@@ -165,7 +180,6 @@ routes = [
 
     # Ollama compat
     web.get('/', index_handler),
-    web.head('/', index_handler),
     web.get('/api/tags', tags_list_handler),
     web.get('/api/version', version_handler),
     web.post('/api/pull', pull_handler),
